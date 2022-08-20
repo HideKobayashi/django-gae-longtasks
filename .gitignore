@@ -462,3 +462,7 @@ tags
 *.code-workspace
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,django,emacs,vim,pycharm
+
+
+### GoogleCloudShell ###
+.theia/*
