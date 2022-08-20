@@ -1,0 +1,2 @@
+Django
+google-cloud-bigquery
