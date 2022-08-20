@@ -30,7 +30,8 @@ class BqScript:
     def __init__(self):
         """
         """
-    
+        return
+
     def s_task1_begin(self):
         """最初のタスク
         """
