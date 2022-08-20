@@ -1,8 +1,9 @@
-from django.shortcuts import render
+"""Views
+"""
+# from django.shortcuts import render
 from django.views.generic import TemplateView
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 
-# Create your views here.
 
 class JobMngView(TemplateView):
     """ジョブ管理のための View

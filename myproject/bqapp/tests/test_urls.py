@@ -1,5 +1,7 @@
+"""Test URLs
+"""
 from django.urls import resolve, reverse
-from django.test import RequestFactory
+# from django.test import RequestFactory
 
 from bqapp.views import JobMngView
 
