@@ -2,3 +2,4 @@ pylint
 pylint-django
 ipython
 pytest
+pytest-django
