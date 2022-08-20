@@ -8,6 +8,7 @@ from bqapp.models import MainTask, SubTask
 
 from django.utils.timezone import make_aware
 
+
 @pytest.fixture
 def db_mt():
     """MainTask にテスト用レコードを入れる
@@ -22,9 +23,9 @@ def db_mt():
         "out_data",
     )
     rows = [
-        ("jobId9001", "main_task1", "未処理", 
+        ("jobId9001", "main_task1", "未処理",
             make_aware(datetime(2022, 8, 20, 10, 10, 10)), "NO_001", "aaa"),
-        ("jobId9002", "main_task1", "未処理", 
+        ("jobId9002", "main_task1", "未処理",
             make_aware(datetime(2022, 8, 20, 10, 10, 10)), "NO_002", "aaa"),
     ]
     record_list = []
