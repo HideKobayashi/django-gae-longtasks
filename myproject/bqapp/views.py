@@ -1,8 +1,10 @@
 """Views
 """
 # from django.shortcuts import render
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, ListView
 from django.http import JsonResponse
+
+from bqapp.models import MainTask
 
 
 class JobMngView(TemplateView):
@@ -14,3 +16,10 @@ class JobMngView(TemplateView):
         response = {}
         response["message"] = "Hello"
         return JsonResponse(response)
+
+
+class MainTaskView(ListView):
+    """MainTaskView を表示する
+    """
+    template_name = "bqapp/maintask_list.html"
+    model = MainTask
