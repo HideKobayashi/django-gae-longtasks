@@ -1,7 +1,11 @@
 """BigQuery Requests
 """
-# import time
+import time
+import json
+from datetime import datetime
 from google.cloud import bigquery
+
+from django.utils.timezone import make_aware
 
 
 class ParamError(Exception):
@@ -10,8 +14,9 @@ class ParamError(Exception):
 
 
 project = "bigquery-poc-220606"
-location = None
+location = "US"
 # location = "asia-notheast1"
+# location = None
 
 
 def query_sleep(sleep_time: int = 5):
@@ -19,9 +24,18 @@ def query_sleep(sleep_time: int = 5):
     rdict["project"] = project
     rdict["location"] = location
     client = bigquery.Client(project=project, location=location)
-    query_job = client.query(
-        f"CALL `bigquery-poc-220606.tools_tokyo.sleep`({sleep_time})"
-    )
+    query_str = """SELECT
+  CONCAT(
+    'https://stackoverflow.com/questions/',
+    CAST(id as STRING)) as url,
+  view_count
+FROM `bigquery-public-data.stackoverflow.posts_questions`
+WHERE tags like '%google-bigquery%'
+ORDER BY view_count DESC
+LIMIT 10;
+    """
+    # query_str += f"CALL `bigquery-poc-220606.tools_tokyo.sleep`({sleep_time})"
+    query_job = client.query(query_str)
 
     job_id = query_job.job_id
 
@@ -37,6 +51,8 @@ def query_sleep(sleep_time: int = 5):
 
 
 def get_job_state(job_id: str):
+    """QueryJob の state を取得する
+    """
     rdict = {"job_id": None, "state": None}
     rdict["project"] = project
     rdict["location"] = location
@@ -52,7 +68,7 @@ class BqScript:
     main_task_name = ""
     progress_dict = {}
 
-    def __init__(self, main_job_id: str, main_task_name: str):
+    def __init__(self, main_job_id: str = "", main_task_name: str = ""):
         """初期化
         """
         self.main_job_id = main_job_id
@@ -65,6 +81,42 @@ class BqScript:
             "task5_end": {"func": self.s_task5_end, "next": None},
         }
         return
+
+    def start_main_task(self):
+        """メインタスクを開始する
+
+        先頭のタスクを開始して先頭のタスクのjob_id を得る
+        """
+        rdict = {}
+        sub_rdict = {}
+        tasks = self.tasks_dict
+        head_task_name = "task1_begin"
+        head_task_func = tasks[head_task_name]["func"]
+
+        job_id, _out_data = head_task_func()
+        now_dt = make_aware(datetime.now())
+        self.main_job_id = job_id
+        time.sleep(1)
+        # state = get_job_state(job_id)
+        state = "RUNNING"
+        in_data = {}
+        out_data = {}
+
+        rdict["main_job_id"] = self.main_job_id
+        rdict["main_task_name"] = self.main_task_name
+        rdict["process_state"] = state
+        rdict["process_start_time"] = now_dt
+        rdict["in_data"] = json.dumps(in_data, ensure_ascii=False)
+        rdict["out_data"] = json.dumps(out_data, ensure_ascii=False)
+
+        sub_rdict["sub_job_id"] = self.main_job_id
+        sub_rdict["sub_task_name"] = head_task_name
+        sub_rdict["process_state"] = state
+        sub_rdict["process_start_time"] = now_dt
+        sub_rdict["in_data"] = json.dumps(in_data, ensure_ascii=False)
+        sub_rdict["out_data"] = json.dumps(out_data, ensure_ascii=False)
+        sub_rdict["main_task"] = None
+        return rdict, sub_rdict
 
     def urge_process_to_go_forward(self, task_name: str, job_id: str):
         """処理を進めるよう要請する
@@ -83,7 +135,8 @@ class BqScript:
             next_task_func = tasks[next_task_name]["func"]
 
         # job_id のジョブが終わっているか確認する
-        state = get_job_state(job_id)
+        # state = get_job_state(job_id)
+        state = "DONE"
 
         if state == "RUNNING":
             message = f"Current task state is {state}. (job_id: {job_id}, task_name: {task_name}) "
@@ -94,7 +147,7 @@ class BqScript:
                 message = f"Final process state is {state}. (job_id: {job_id}, task_name: {task_name})"
             else:
                 # 次のタスクを実行して次のタスクの job_id を得る
-                rdict = next_task_func()
+                job_id, rdict = next_task_func()
                 next_job_id = rdict.get("job_id", None)
                 message = f"Next job is started. (next_job_id: {next_job_id}, next_task_name: {next_task_name}"
         else:
@@ -106,24 +159,34 @@ class BqScript:
     def s_task1_begin(self):
         """最初のタスク
         """
-        return query_sleep()
+        rdict = query_sleep()
+        job_id = rdict.get("job_id")
+        return job_id, rdict
 
     def s_task2_mid(self):
         """２番目のタスク
         """
-        return query_sleep()
+        rdict = query_sleep()
+        job_id = rdict.get("job_id")
+        return job_id, rdict
 
     def s_task3_mid(self):
         """3番目のタスク
         """
-        return query_sleep()
+        rdict = query_sleep()
+        job_id = rdict.get("job_id")
+        return job_id, rdict
 
     def s_task4_mid(self):
         """4番目のタスク
         """
-        return query_sleep()
+        rdict = query_sleep()
+        job_id = rdict.get("job_id")
+        return job_id, rdict
 
     def s_task5_end(self):
         """5番目のタスク
         """
-        return query_sleep()
+        rdict = query_sleep()
+        job_id = rdict.get("job_id")
+        return job_id, rdict
