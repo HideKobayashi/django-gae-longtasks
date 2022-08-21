@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+
+{% block main %}
+<div class="welcome">
+    <h1 class="title">SubTask</h1>
+    <p class="subtitle">SubTask List</p>
+</div>
+<form method="get">
+    <button name="updateStatus" value="update">Update Status</button>
+</form>
+{% if object_list %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>sub_job_id</th>
+            <th>sub_task_name</th>
+            <th>process_state</th>
+            <th>process_start_time</th>
+            <th>in_data</th>
+            <th>out_data</th>
+            <th>main_job_id</th>
+            <th>created_at</th>
+            <th>updated_at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for object in object_list %}
+        <tr>
+            <th>{{object.sub_job_id}}</th>
+            <th>{{object.sub_task_name}}</th>
+            <th>{{object.process_state}}</th>
+            <th>{{object.process_start_time}}</th>
+            <th>{{object.in_data}}</th>
+            <th>{{object.out_data}}</th>
+            <th>{{object.main_task.main_job_id}}</th>
+            <th>{{object.created_at}}</th>
+            <th>{{object.updated_at}}</th>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+    <p>レコードがありません。</p>
+{% endif %}        
+{% endblock %}
