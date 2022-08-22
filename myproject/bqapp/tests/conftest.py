@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 from google.cloud import bigquery
+# from google.api_core import exceptions
 
 
 def mocked_query_job(job_id: str) -> bigquery.QueryJob:
@@ -52,7 +53,6 @@ def mocked_query_job_done():
 def create_qj():
     """QueryJobを作成する
     """
-    sleep_time = 5
     project = os.getenv("GOOGLE_CLOUD_PROJECT", None)
     location = os.getenv("GOOGLE_CLOUD_LOCATION", None)
     client = bigquery.Client(project=project, location=location)
@@ -66,24 +66,18 @@ WHERE tags like '%google-bigquery%'
 ORDER BY view_count DESC
 LIMIT 10;
     """
-    query_str += f"""DECLARE DELAY_TIME DATETIME;
-DECLARE WAIT BOOL;
-
-BEGIN
-  SET WAIT = TRUE;
-  SET DELAY_TIME = DATE_ADD(CURRENT_DATETIME, INTERVAL {sleep_time} SECOND);
-  WHILE WAIT DO
-    IF (DELAY_TIME < CURRENT_DATETIME) THEN
-      SET WAIT = FALSE;
-    END IF;
-  END WHILE;
-END
-    """
     query_job = client.query(query_str)
 
     yield query_job
 
     job_id = query_job.job_id
-    print(f"job_id: {job_id}")
-    canceled_job = client.cancel_job(job_id)
-    print(f"{canceled_job.location}:{canceled_job.job_id} cancelled")
+    location = query_job.location
+    # print(f"job_id: {job_id}")
+    _ = client.cancel_job(job_id, location=location)
+    # print(f"Job {_.location}:{_.job_id} was cancelled.")
+
+    client.delete_job_metadata(job_id, location=location)
+    # try:
+    #     client.get_job(job_id, location=location)
+    # except exceptions.NotFound:
+    #     print(f"Job metadata for job {location}:{job_id} was deleted.")
