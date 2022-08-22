@@ -97,9 +97,40 @@ class TestGetJobState:
         print(f"actual: {actual}", end="| ")
 
     def test_ok_no_mock(self, create_qj):
+        """正常系　モックなし
+        """
         query_job = create_qj
         job_id = query_job.job_id
 
         actual = get_job_state(job_id)
 
         print(f"actual: {actual}", end="| ")
+
+class TestCreateQj:
+    """create_qj のテスト
+    """
+    def test_create_qj_no_mock(self, create_qj):
+        """正常系 モックなし
+        """
+        query_job = create_qj
+
+        job_id = query_job.job_id
+        location = query_job.location
+        project = query_job.project
+        job_type = query_job.job_type
+        job_created_at = query_job.created
+        job_started_at = query_job.started
+        job_ended_at = query_job.ended
+        error_result = query_job.error_result
+        state = query_job.state
+
+        print()
+        print(f"job_id: {job_id}")
+        print(f"location: {location}")
+        print(f"project: {project}")
+        print(f"job_type: {job_type}")
+        print(f"job_created_at: {job_created_at}")
+        print(f"job_started_at: {job_started_at}")
+        print(f"job_ended_at: {job_ended_at}")
+        print(f"error_result: {error_result}")
+        print(f"state: {state}")
