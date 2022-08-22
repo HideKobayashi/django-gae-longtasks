@@ -96,14 +96,9 @@ class TestGetJobState:
 
         print(f"actual: {actual}", end="| ")
 
-    def test_ok_no_mock(self):
-        # job_id = "c121c14d-5212-49e5-b253-ec73cbb37ec7"
-        # job_id = "92cd4ab7-59c4-465f-8bc2-7c79c72acd9e"
-        # job_id = "d800cd5e-5255-4518-83c5-abb90b074e6c"
-        # job_id = "bquxjob_636425cc_182c03b3ded"
-        # job_id = "bc6ca690-8671-4d41-b198-f516f3ef2a84 "
-        # job_id = "09386c91-59a4-471c-92b0-df3be56cac38"
-        job_id = "24d508b7-f6e9-4a71-a8df-027bbe76d385"
+    def test_ok_no_mock(self, create_qj):
+        query_job = create_qj
+        job_id = query_job.job_id
 
         actual = get_job_state(job_id)
 

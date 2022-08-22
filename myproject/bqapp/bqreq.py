@@ -1,10 +1,11 @@
 """BigQuery Requests
 """
+import os
 import time
 import json
 from datetime import datetime
-from google.cloud import bigquery
 
+from google.cloud import bigquery
 from django.utils.timezone import make_aware
 
 
@@ -13,13 +14,14 @@ class ParamError(Exception):
     """
 
 
-project = "bigquery-poc-220606"
-location = "US"
+project = os.getenv("GOOGLE_CLOUD_PROJECT", None)
+location = os.getenv("GOOGLE_CLOUD_LOCATION", None)
+# project = "bigquery-poc-220606"
 # location = "asia-notheast1"
 # location = None
 
 
-def query_sleep(sleep_time: int = 5):
+def query_fake(sleep_time: int = 5):
     rdict = {"job_id": None, "state": None}
     rdict["project"] = project
     rdict["location"] = location
@@ -35,6 +37,19 @@ ORDER BY view_count DESC
 LIMIT 10;
     """
     # query_str += f"CALL `bigquery-poc-220606.tools_tokyo.sleep`({sleep_time})"
+    query_str += f"""DECLARE DELAY_TIME DATETIME;
+DECLARE WAIT BOOL;
+
+BEGIN
+  SET WAIT = TRUE;
+  SET DELAY_TIME = DATE_ADD(CURRENT_DATETIME, INTERVAL {sleep_time} SECOND);
+  WHILE WAIT DO
+    IF (DELAY_TIME < CURRENT_DATETIME) THEN
+      SET WAIT = FALSE;
+    END IF;
+  END WHILE;
+END
+    """
     query_job = client.query(query_str)
 
     job_id = query_job.job_id
@@ -48,6 +63,29 @@ LIMIT 10;
     rdict["state"] = query_job.state
     # print(f"job_id: {job_id}, Job state: {query_job.state}")
     return rdict
+
+
+def query_sleep(sleep_time: int = 5):
+    """BigQuery sleep
+    """
+    client = bigquery.Client(project=project, location=location)
+    query_str = ""
+    query_str += f"""DECLARE DELAY_TIME DATETIME;
+DECLARE WAIT BOOL;
+
+BEGIN
+  SET WAIT = TRUE;
+  SET DELAY_TIME = DATE_ADD(CURRENT_DATETIME, INTERVAL {sleep_time} SECOND);
+  WHILE WAIT DO
+    IF (DELAY_TIME < CURRENT_DATETIME) THEN
+      SET WAIT = FALSE;
+    END IF;
+  END WHILE;
+END
+    """
+    query_job = client.query(query_str)
+    job_id = query_job.job_id
+    return job_id
 
 
 def get_job_state(job_id: str):
@@ -159,34 +197,34 @@ class BqScript:
     def s_task1_begin(self):
         """最初のタスク
         """
-        rdict = query_sleep()
+        rdict = query_fake()
         job_id = rdict.get("job_id")
         return job_id, rdict
 
     def s_task2_mid(self):
         """２番目のタスク
         """
-        rdict = query_sleep()
+        rdict = query_fake()
         job_id = rdict.get("job_id")
         return job_id, rdict
 
     def s_task3_mid(self):
         """3番目のタスク
         """
-        rdict = query_sleep()
+        rdict = query_fake()
         job_id = rdict.get("job_id")
         return job_id, rdict
 
     def s_task4_mid(self):
         """4番目のタスク
         """
-        rdict = query_sleep()
+        rdict = query_fake()
         job_id = rdict.get("job_id")
         return job_id, rdict
 
     def s_task5_end(self):
         """5番目のタスク
         """
-        rdict = query_sleep()
+        rdict = query_fake()
         job_id = rdict.get("job_id")
         return job_id, rdict
