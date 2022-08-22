@@ -5,7 +5,8 @@ from django.views.generic import TemplateView, ListView
 from django.http import JsonResponse
 
 from bqapp.models import MainTask, SubTask
-from bqapp.bqreq import BqScript, get_job_state
+from bqapp.bqreq import BqScript
+# from bqapp.bqreq import get_job_state
 
 
 class JobMngView(TemplateView):
@@ -95,19 +96,30 @@ class SubTaskView(ListView):
                     sub_task_name, sub_job_id)
 
                 # ＜サブタスクとメインタスクの処理状態を更新する＞
-                # サブタスクの処理状態が RUNNING なら
-                    # サブタスクの処理状態を　RUNNNINGで更新
-                    # メインタスクの処理状態を RUNNING で更新
-                # サブタスクの処理状態が　DONE かつ 次のタスクがあるなら
-                    # サブタスクの処理状態を DONE で更新
-                    # サブタスクに次のタスクを処理状態 RUNNING で登録
-                    # 登録するフィールド: sub_job_id, sub_task_name, process_state, process_start_time, in_data, out_data, main_task
-                    # メインタスクの処理状態を RUNNING で更新
-                # サブタスクの処理状態が DONE かつ 次のサブタスクがないなら
-                    # サブタスクの処理状態を　DONE で更新
-                    # メインタスクの処理状態を DONE で更新
-                # サブタスクの処理状態が　FAIL なら
-                    # サブタスクの処理状態を FAIL で更新
-                    # メインタスクの処理状態を FAIL で更新
+                # update_process_status(sub_task_state, next_job_id, next_task_data)
 
         return render(request, self.template_name, context)
+
+
+def update_process_status(
+        sub_task_state: str,
+        next_job_id: str,
+        next_task_data: dict):
+    """サブタスクとメインタスクの処理状態を更新する
+    """
+    # サブタスクの処理状態が RUNNING なら
+        # サブタスクの処理状態を　RUNNNINGで更新
+        # メインタスクの処理状態を RUNNING で更新
+    # サブタスクの処理状態が　DONE かつ 次のタスクがあるなら
+        # サブタスクの処理状態を DONE で更新
+        # サブタスクに次のタスクを処理状態 RUNNING で登録
+        # 登録するフィールド:
+        #   sub_job_id, sub_task_name, process_state,
+        #   process_start_time, in_data, out_data, main_task
+        # メインタスクの処理状態を RUNNING で更新
+    # サブタスクの処理状態が DONE かつ 次のサブタスクがないなら
+        # サブタスクの処理状態を　DONE で更新
+        # メインタスクの処理状態を DONE で更新
+    # サブタスクの処理状態が　FAIL なら
+        # サブタスクの処理状態を FAIL で更新
+        # メインタスクの処理状態を FAIL で更新
