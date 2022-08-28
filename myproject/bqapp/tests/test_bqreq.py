@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 from pytest import param as pp
 
-from bqapp.bqreq import BqScript, get_job_state
+from bqapp.bqreq import BqScript, get_job_state, get_process_state
 from bqapp.tests.conftest import mocked_query_job
 
 
@@ -138,6 +138,50 @@ class TestGetJobState:
         job_id = query_job.job_id
 
         actual = get_job_state(job_id)
+
+        print(f"actual: {actual}", end="| ")
+
+
+class TestGetProcessState:
+    """関数　get_process_state のテスト
+    """
+    @pytest.mark.parametrize('job_id_list, expect', [
+        pp(['jobid_done', 'jobid_done'], 'DONE-SUCCESS', id='all_done'),
+        pp(['jobid_failure', 'jobid_done'], 'DONE-FAILURE', id='any_failure'),
+        pp(['jobid_failure', 'jobid_pending'], 'DONE-FAILURE', id='any_failure'),
+        pp(['jobid_failure', 'jobid_running'], 'FAILURE', id='any_failure'),
+        pp(['jobid_pending', 'jobid_done'], 'PENDING', id='any_pending'),
+        pp(['jobid_pending', 'jobid_running'], 'PENDING', id='any_pending'),
+        pp(['jobid_running', 'jobid_done'], 'RUNNING', id='any_running'),
+        pp(['jobid_done', 'jobid_done', 'jobid_done'], 'DONE-SUCCESS', id='all_done_triple'),
+        pp(['jobid_done', 'jobid_failure', 'jobid_done'], 'FAILURE', id='any_failure_triple'),
+    ])
+    def test_ok(self, job_id_list, expect):
+        """正常系
+
+        条件: DONE-SUCCESS, DONE-SUCCESS
+        期待値: DONE-SUCCESS
+
+        条件: RUNNING, DONE-SUCCESS
+        期待値: RUNNING
+        """
+        with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
+            mock_client().get_job.side_effect = [mocked_query_job(x) for x in job_id_list]
+            actual = get_process_state(job_id_list)
+
+        print(f"actual: {actual}", end="| ")
+        # assert expect == actual
+
+    def test_ok_no_mock(self, create_qj_list):
+        """正常系　モックなし
+        """
+        query_job_list = create_qj_list
+        job_id_list = [x.job_id for x in query_job_list]
+        # job_id = query_job.job_id
+        # job_id_list = [job_id]
+        print(f"job_id_list: {job_id_list}")
+
+        actual = get_process_state(job_id_list)
 
         print(f"actual: {actual}", end="| ")
 

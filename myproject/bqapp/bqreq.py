@@ -1,5 +1,6 @@
 """BigQuery Requests
 """
+from typing import Tuple, Union, List
 import os
 import time
 import json
@@ -92,7 +93,7 @@ END
     return job_id
 
 
-def get_job_state(job_id: str):
+def get_job_state(job_id: str) -> Tuple[str, Optional[str]]:
     """QueryJob の state を取得する
     """
     # rdict = {"job_id": None, "state": None}
@@ -115,6 +116,36 @@ def judge_job_state(state: str, error_result: Optional[str]) -> str:
             judge = 'DONE-SUCCESS'
     else:
         judge = 'PENDING'
+    return judge
+
+
+def get_process_state(job_id_list: List[str]) -> str:
+    """ジョブIDリストの複数のプロセス状態を取得して判定結果を返す
+
+    DONE-SUCCESS: 全てのジョブが完了
+    DONE-FAILURE: 上記以外で、一つでも失敗したジョブがある
+    PENDING: 上記以外で、一つでも保留にされたジョブがある
+    RUNNING: 上記以外で、一つでも処理中のジョブがある
+    """
+    judge = ""
+    judge_list = []
+    for job_id in job_id_list:
+        state, error_result = get_job_state(job_id)
+        single_judge = judge_job_state(state, error_result)
+        single_judge_dict = {'job_id': job_id, 'judge': single_judge}
+        judge_list.append(single_judge_dict)
+    # judge_bool_list = [x['judge'] == 'DONE-SUCCESS' for x in judge_list]
+    # print(f"judge_list: {judge_list}")
+    # print(f"judge_bool_list: {judge_bool_list}")
+    # print(f"all(judge_bool_list): {all(judge_bool_list)}")
+    if all([x['judge'] == 'DONE-SUCCESS' for x in judge_list]):
+        judge = 'DONE-SUCCESS'
+    elif any([x['judge'] == 'DONE-FAILURE' for x in judge_list]):
+        judge = 'DONE-FAILURE'
+    elif any([x['judge'] == 'PENDING' for x in judge_list]):
+        judge = 'PENDING'
+    elif any([x['judge'] == 'RUNNING' for x in judge_list]):
+        judge = 'RUNNING'
     return judge
 
 

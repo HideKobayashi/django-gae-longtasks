@@ -87,3 +87,42 @@ LIMIT 10;
     #     client.get_job(job_id, location=location)
     # except exceptions.NotFound:
     #     print(f"Job metadata for job {location}:{job_id} was deleted.")
+
+
+@pytest.fixture
+def create_qj_list():
+    """複数のQueryJobを作成する
+    """
+    qj_list = []
+    num_query_jobs = 2
+    project = os.getenv("GOOGLE_CLOUD_PROJECT", None)
+    location = os.getenv("GOOGLE_CLOUD_LOCATION", None)
+    client = bigquery.Client(project=project, location=location)
+    query_str = """SELECT
+  CONCAT(
+    'https://stackoverflow.com/questions/',
+    CAST(id as STRING)) as url,
+  view_count
+FROM `bigquery-public-data.stackoverflow.posts_questions`
+WHERE tags like '%google-bigquery%'
+ORDER BY view_count DESC
+LIMIT 10;
+    """
+    for i in range(num_query_jobs):
+        query_job = client.query(query_str)
+        qj_list.append(query_job)
+
+    yield qj_list
+
+    for query_job in qj_list:
+        job_id = query_job.job_id
+        location = query_job.location
+        # print(f"job_id: {job_id}")
+        _ = client.cancel_job(job_id, location=location)
+        # print(f"Job {_.location}:{_.job_id} was cancelled.")
+
+        client.delete_job_metadata(job_id, location=location)
+        # try:
+        #     client.get_job(job_id, location=location)
+        # except exceptions.NotFound:
+        #     print(f"Job metadata for job {location}:{job_id} was deleted.")
