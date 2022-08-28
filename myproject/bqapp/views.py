@@ -92,34 +92,69 @@ class SubTaskView(ListView):
 
                 # sub_job_id の処理状態を取得しサブタスクの実行を進める
                 bqscript = BqScript(main_job_id, main_task_name)
-                next_job_id, message = bqscript.urge_process_to_go_forward(
+                next_job_dict, message, sub_task_dict = bqscript.urge_process_to_go_forward(
                     sub_task_name, sub_job_id)
+                next_job_dict['main_task'] = record.main_task
 
                 # ＜サブタスクとメインタスクの処理状態を更新する＞
-                # update_process_status(sub_task_state, next_job_id, next_task_data)
+                # update_task_db_tables(record, sub_task_dict,  next_task_dict)
 
         return render(request, self.template_name, context)
 
 
-def update_process_status(
-        sub_task_state: str,
-        next_job_id: str,
-        next_task_data: dict):
+def do_update_task_db_tables(
+        record: SubTask,
+        sub_task_dict: dict,
+        next_task_dict: dict):
     """サブタスクとメインタスクの処理状態を更新する
     """
+    # サブタスクのパラメータ取得
+    sub_task_state = sub_task_dict["state"]
+    # sub_job_id = sub_task_dict["job_id"]
+    # sub_task_name = sub_task_dict["task_name"]
     # サブタスクの処理状態が RUNNING なら
+    if sub_task_state == 'RUNNNING':
         # サブタスクの処理状態を　RUNNNINGで更新
+        record.process_state = 'RUNNING'
         # メインタスクの処理状態を RUNNING で更新
-    # サブタスクの処理状態が　DONE かつ 次のタスクがあるなら
-        # サブタスクの処理状態を DONE で更新
-        # サブタスクに次のタスクを処理状態 RUNNING で登録
-        # 登録するフィールド:
-        #   sub_job_id, sub_task_name, process_state,
-        #   process_start_time, in_data, out_data, main_task
-        # メインタスクの処理状態を RUNNING で更新
-    # サブタスクの処理状態が DONE かつ 次のサブタスクがないなら
-        # サブタスクの処理状態を　DONE で更新
-        # メインタスクの処理状態を DONE で更新
+        record.main_task.process_state = 'RUNNING'
+        branch = 'running'
+    # サブタスクの処理状態が　DONE-SUCCESS 
+    elif sub_task_state == 'DONE-SUCCESS':
+        # かつ 次のタスクがあるなら
+        if next_task_dict:
+            # サブタスクの処理状態を DONE で更新
+            record.process_state = 'DONE-SUCCESS'
+            # サブタスクに次のタスクを処理状態 RUNNING で登録
+            next_st_record = SubTask(**next_task_dict)
+            next_st_record.save()
+            # 登録するフィールド:
+            #   sub_job_id, sub_task_name, process_state,
+            #   process_start_time, in_data, out_data, main_task
+            # メインタスクの処理状態を RUNNING で更新
+            # メインタスクの処理状態を RUNNING で更新
+            record.main_task.process_state = 'RUNNING'
+            branch = 'done-middle'
+        # かつ 次のサブタスクがないなら
+        else:
+            # サブタスクの処理状態を　DONE で更新
+            record.process_start_time = 'DONE-SUCCESS'
+            # メインタスクの処理状態を DONE で更新
+            record.main_task.process_state = 'DONE-SUCCESS'
+            branch = 'done-final'
     # サブタスクの処理状態が　FAIL なら
+    elif sub_task_state == 'DONE-FAILURE':
         # サブタスクの処理状態を FAIL で更新
+        record.process_state = 'DONE-FAILURE'
         # メインタスクの処理状態を FAIL で更新
+        record.main_task.process_state = 'DONE-FAILURE'
+        branch = 'done-failure'
+    else:
+        # サブタスクの処理状態を PENDING で更新
+        record.process_state = 'PENDING'
+        # メインタスクの処理状態を FAIL で更新
+        record.main_task.process_state = 'PENDING'
+        branch = 'pending'
+    record.save()
+    record.main_task.save()
+    return branch

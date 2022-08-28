@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 from pytest import param as pp
 
-from bqapp.bqreq import BqScript, get_job_state
+from bqapp.bqreq import BqScript, get_job_state, get_process_state
 from bqapp.tests.conftest import mocked_query_job
 
 
@@ -47,8 +47,9 @@ class TestBqScript:
         pp("task4_mid", "Next job is started", id="task4_mid"),
         pp("task5_end", "Final process state is", id="task5_end"),
     ])
-    def test_urge_process_to_go_forward(self, task_name, expect_message):
+    def test_urge_process_to_go_forward_subtask_done(self, task_name, expect_message):
         """ メソッド urge_process_to_go_forward
+        正常系
         """
         main_job_id = "main_jobid"
         main_task_name = "main_task"
@@ -59,11 +60,41 @@ class TestBqScript:
             mock_client().get_job.return_value = mocked_query_job(job_id)
             mock_client().query.return_value = mocked_query_job(next_job_id)
             bqscript = BqScript(main_job_id, main_task_name)
-            job_info, message = bqscript.urge_process_to_go_forward(task_name, job_id)
+            job_info, message, sub_task_dict = bqscript.urge_process_to_go_forward(task_name, job_id)
         actual = message
 
         print(f"actual: {actual}", end="| ")
+        print(f"job_info: {job_info}")
         assert actual.startswith(expect_message)
+
+    @pytest.mark.parametrize('job_id, task_name, expect_message', [
+        pp("jobid_failure", "task2_mid", "Last process state is DONE-FAILURE", id="failure"),
+        pp("jobid_running", "task2_mid", "Current process state is RUNNING", id="running"),
+        pp("jobid_pending", "task2_mid", "Current process state is PENDING", id="pending"),
+    ])
+    def test_urge_process_to_go_forward_subtask_ng(self, job_id, task_name, expect_message):
+        """ メソッド urge_process_to_go_forward
+        異常系
+        
+        条件: サブタスク失敗
+        条件: サブタスク待機
+        条件: サブタスク進行中
+        """
+        main_job_id = "main_jobid"
+        main_task_name = "main_task"
+        # job_id = "jobid_failure"
+        next_job_id = "jobid_running"
+
+        with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
+            mock_client().get_job.return_value = mocked_query_job(job_id)
+            mock_client().query.return_value = mocked_query_job(next_job_id)
+            bqscript = BqScript(main_job_id, main_task_name)
+            job_info, message, sub_task_dict = bqscript.urge_process_to_go_forward(task_name, job_id)
+        actual = message
+
+        print(f"actual: {actual}", end="| ")
+        print(f"job_info: {job_info}")
+        # assert actual.startswith(expect_message)
 
     def test_start_main_task(self):
         """ メソッド start_main_task
@@ -84,27 +115,102 @@ class TestBqScript:
 class TestGetJobState:
     """関数　get_job_state のテスト
     """
-    def test_ok(self):
-        job_id = "jobid_running"
-        job_id = "jobid_done"
-        job_id = "jobid_fail"
-
+    @pytest.mark.parametrize('job_id, expect', [
+        pp("jobid_running", ('RUNNING', None), id='running'),
+        pp("jobid_done", ('DONE', None), id='done'),
+        pp("jobid_failure", ('DONE', 'failure'), id='faillure'),
+    ])
+    def test_ok(self, job_id, expect):
+        """正常系
+        """
         with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
             mock_client().get_job.return_value = mocked_query_job(job_id)
             mock_client().query.return_value = mocked_query_job(job_id)
             actual = get_job_state(job_id)
 
         print(f"actual: {actual}", end="| ")
+        assert expect == actual
 
-    def test_ok_no_mock(self):
-        # job_id = "c121c14d-5212-49e5-b253-ec73cbb37ec7"
-        # job_id = "92cd4ab7-59c4-465f-8bc2-7c79c72acd9e"
-        # job_id = "d800cd5e-5255-4518-83c5-abb90b074e6c"
-        # job_id = "bquxjob_636425cc_182c03b3ded"
-        # job_id = "bc6ca690-8671-4d41-b198-f516f3ef2a84 "
-        # job_id = "09386c91-59a4-471c-92b0-df3be56cac38"
-        job_id = "24d508b7-f6e9-4a71-a8df-027bbe76d385"
+    def test_ok_no_mock(self, create_qj):
+        """正常系　モックなし
+        """
+        query_job = create_qj
+        job_id = query_job.job_id
 
         actual = get_job_state(job_id)
 
         print(f"actual: {actual}", end="| ")
+
+
+class TestGetProcessState:
+    """関数　get_process_state のテスト
+    """
+    @pytest.mark.parametrize('job_id_list, expect', [
+        pp(['jobid_done', 'jobid_done'], 'DONE-SUCCESS', id='all_done'),
+        pp(['jobid_failure', 'jobid_done'], 'DONE-FAILURE', id='any_failure'),
+        pp(['jobid_failure', 'jobid_pending'], 'DONE-FAILURE', id='any_failure'),
+        pp(['jobid_failure', 'jobid_running'], 'FAILURE', id='any_failure'),
+        pp(['jobid_pending', 'jobid_done'], 'PENDING', id='any_pending'),
+        pp(['jobid_pending', 'jobid_running'], 'PENDING', id='any_pending'),
+        pp(['jobid_running', 'jobid_done'], 'RUNNING', id='any_running'),
+        pp(['jobid_done', 'jobid_done', 'jobid_done'], 'DONE-SUCCESS', id='all_done_triple'),
+        pp(['jobid_done', 'jobid_failure', 'jobid_done'], 'FAILURE', id='any_failure_triple'),
+    ])
+    def test_ok(self, job_id_list, expect):
+        """正常系
+
+        条件: DONE-SUCCESS, DONE-SUCCESS
+        期待値: DONE-SUCCESS
+
+        条件: RUNNING, DONE-SUCCESS
+        期待値: RUNNING
+        """
+        with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
+            mock_client().get_job.side_effect = [mocked_query_job(x) for x in job_id_list]
+            actual = get_process_state(job_id_list)
+
+        print(f"actual: {actual}", end="| ")
+        # assert expect == actual
+
+    def test_ok_no_mock(self, create_qj_list):
+        """正常系　モックなし
+        """
+        query_job_list = create_qj_list
+        job_id_list = [x.job_id for x in query_job_list]
+        # job_id = query_job.job_id
+        # job_id_list = [job_id]
+        print(f"job_id_list: {job_id_list}")
+
+        actual = get_process_state(job_id_list)
+
+        print(f"actual: {actual}", end="| ")
+
+
+class TestCreateQj:
+    """create_qj のテスト
+    """
+    def test_create_qj_no_mock(self, create_qj):
+        """正常系 モックなし
+        """
+        query_job = create_qj
+
+        job_id = query_job.job_id
+        location = query_job.location
+        project = query_job.project
+        job_type = query_job.job_type
+        job_created_at = query_job.created
+        job_started_at = query_job.started
+        job_ended_at = query_job.ended
+        error_result = query_job.error_result
+        state = query_job.state
+
+        print()
+        print(f"job_id: {job_id}")
+        print(f"location: {location}")
+        print(f"project: {project}")
+        print(f"job_type: {job_type}")
+        print(f"job_created_at: {job_created_at}")
+        print(f"job_started_at: {job_started_at}")
+        print(f"job_ended_at: {job_ended_at}")
+        print(f"error_result: {error_result}")
+        print(f"state: {state}")
