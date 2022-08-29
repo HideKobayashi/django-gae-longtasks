@@ -324,7 +324,7 @@ class BqScriptParallel(BqScript):
         # task_func = task["func"]
         next_task_name = task["next"]
         if next_task_name is None:
-            next_task_func = None
+            next_task_func_list = None
         else:
             next_task_func_list = tasks[next_task_name]["func"]
 
@@ -361,8 +361,7 @@ class BqScriptParallel(BqScript):
             cls,
             next_task_func_list: List[callable],
             state: str,
-            next_task_name: str,
-            in_data: dict):
+            next_task_name: str):
         """次のタスクを実行する
         """
         next_job_id_list = []

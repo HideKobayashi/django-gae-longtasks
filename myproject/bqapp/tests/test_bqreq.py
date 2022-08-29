@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 from pytest import param as pp
 
-from bqapp.bqreq import BqScript, get_job_state, get_process_state
+from bqapp.bqreq import BqScript, get_job_state, get_process_state, BqScriptParallel
 from bqapp.tests.conftest import mocked_query_job
 
 
@@ -214,3 +214,94 @@ class TestCreateQj:
         print(f"job_ended_at: {job_ended_at}")
         print(f"error_result: {error_result}")
         print(f"state: {state}")
+
+
+class TestBqScriptParallel:
+    """BqScriptParallel の単体テスト
+    """
+    def test_s_tesk1(self):
+        """ メソッド s_task1
+        """
+        main_job_id = "main_jobid"
+        main_task_name = "main_task"
+        job_id = "jobid_done"
+        expect_job_id = job_id
+        with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
+            mock_client().query.return_value = mocked_query_job(job_id)
+            bqscript = BqScriptParallel(main_job_id, main_task_name)
+            job_id, actual = bqscript.s_task1_begin()
+
+        print(f"actual: {actual}", end="| ")
+        assert actual["job_id"] == expect_job_id
+
+    @pytest.mark.parametrize('task_name, expect_message', [
+        pp("task1_begin", "Next job is started", id="task1_begin"),
+        pp("task2and3_mid", "Next job is started", id="task2and3_mid"),
+        pp("task4_mid", "Next job is started", id="task4_mid"),
+        pp("task5_end", "Final process state is", id="task5_end"),
+    ])
+    def test_urge_process_to_go_forward_subtask_done(self, task_name, expect_message):
+        """ メソッド urge_process_to_go_forward
+        正常系
+        """
+        main_job_id = "main_jobid"
+        main_task_name = "main_task"
+        job_id_list = ["jobid_done", "jobid_done"]
+        next_job_id_list = ["jobid_running", "jobid_running"]
+
+        with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
+            mock_client().get_job.side_effect = [mocked_query_job(x) for x in job_id_list]
+            mock_client().query.side_effect = [mocked_query_job(x) for x in next_job_id_list]
+            bqscript = BqScriptParallel(main_job_id, main_task_name)
+            job_info, message, sub_task_dict = bqscript.urge_process_to_go_forward(task_name, job_id_list)
+        actual = message
+
+        print(f"actual: {actual}", end="| ")
+        print(f"job_info: {job_info}")
+        assert actual.startswith(expect_message)
+
+    @pytest.mark.parametrize('job_id_list, task_name, expect_message', [
+        pp(['jobid_failure', 'jobid_done'], "task2and3_mid", "Last process state is DONE-FAILURE", id="failure"),
+        pp(['jobid_pending', 'jobid_done'], "task2and3_mid", "Last process state is PENDING", id="pending"),
+        pp(['jobid_running', 'jobid_done'], "task2and3_mid", "Last process state is RUNNING", id="running"),
+    ])
+    def test_urge_process_to_go_forward_subtask_ng(self, job_id_list, task_name, expect_message):
+        """ メソッド urge_process_to_go_forward
+        異常系
+        
+        条件: サブタスク失敗
+        条件: サブタスク待機
+        条件: サブタスク進行中
+        """
+        main_job_id = "main_jobid"
+        main_task_name = "main_task"
+        next_job_id_list = ["jobid_running"]
+
+        with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
+            # mock_client().get_job.side_effect = [mocked_query_job(job_id), mocked_query_job(job_id)]
+            # mock_client().query.side_effect = [mocked_query_job(next_job_id), mocked_query_job(next_job_id)]
+            mock_client().get_job.side_effect = [mocked_query_job(x) for x in job_id_list]
+            mock_client().query.side_effect = [mocked_query_job(x) for x in next_job_id_list]
+            bqscript = BqScriptParallel(main_job_id, main_task_name)
+            next_job_dict, message, sub_task_dict = bqscript.urge_process_to_go_forward(task_name, job_id_list)
+        actual = message
+
+        print(f"actual: {actual}", end="| ")
+        print(f"next_job_dict: {next_job_dict}")
+        # assert actual.startswith(expect_message)
+
+    # def test_start_main_task(self):
+    #     """ メソッド start_main_task
+    #     """
+    #     main_task_name = "main_task"
+    #     job_id = "jobid_running"
+
+    #     with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
+    #         mock_client().get_job.return_value = mocked_query_job(job_id)
+    #         mock_client().query.return_value = mocked_query_job(job_id)
+    #         bqscript = BqScript(main_task_name=main_task_name)
+    #         rdict, sub_rdict = bqscript.start_main_task()
+    #     actual = rdict, sub_rdict
+
+    #     print(f"actual: {actual}", end="| ")
+
