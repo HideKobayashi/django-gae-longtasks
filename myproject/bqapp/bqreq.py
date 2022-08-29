@@ -1,6 +1,6 @@
 """BigQuery Requests
 """
-from typing import Tuple, Union, List
+from typing import Tuple, List
 import os
 import time
 import json
@@ -134,16 +134,16 @@ def get_process_state(job_id_list: List[str]) -> str:
         single_judge = judge_job_state(state, error_result)
         single_judge_dict = {'job_id': job_id, 'judge': single_judge}
         judge_list.append(single_judge_dict)
-    # judge_bool_list = [x['judge'] == 'DONE-SUCCESS' for x in judge_list]
-    # print(f"judge_list: {judge_list}")
-    # print(f"judge_bool_list: {judge_bool_list}")
-    # print(f"all(judge_bool_list): {all(judge_bool_list)}")
+    # 全てのジョブの判定結果が 処理済みなら 全体も処理済みとする
     if all([x['judge'] == 'DONE-SUCCESS' for x in judge_list]):
         judge = 'DONE-SUCCESS'
+    # 上記以外で 一つでも　失敗があったら全体を失敗とする
     elif any([x['judge'] == 'DONE-FAILURE' for x in judge_list]):
         judge = 'DONE-FAILURE'
+    # 上記以外で 一つでも　保留があったら全体を保留とする
     elif any([x['judge'] == 'PENDING' for x in judge_list]):
         judge = 'PENDING'
+    # 上記以外で 一つでも　処理中があったら全体を処理中とする
     elif any([x['judge'] == 'RUNNING' for x in judge_list]):
         judge = 'RUNNING'
     return judge
@@ -161,6 +161,10 @@ class BqScript:
         """
         self.main_job_id = main_job_id
         self.main_task_name = main_task_name
+        self.set_tasks()
+        return
+
+    def set_tasks(self):
         self.tasks_dict = {
             "task1_begin": {"func": self.s_task1_begin, "next": "task2_mid"},
             "task2_mid": {"func": self.s_task2_mid, "next": "task3_mid"},
@@ -168,7 +172,6 @@ class BqScript:
             "task4_mid": {"func": self.s_task4_mid, "next": "task5_end"},
             "task5_end": {"func": self.s_task5_end, "next": None},
         }
-        return
 
     def start_main_task(self):
         """メインタスクを開始する
@@ -292,3 +295,134 @@ class BqScript:
         rdict = query_fake()
         job_id = rdict.get("job_id")
         return job_id, rdict
+
+
+class BqScriptParallel(BqScript):
+    """並列実行に対応した　BqScript
+    """
+    def set_tasks(self):
+        self.tasks_dict = {
+            "task1_begin": {"func": [self.s_task1_begin], "next": "task2and3_mid"},
+            "task2and3_mid": {"func": [self.s_task2_mid, self.s_task3_mid], "next": "task4_mid"},
+            "task4_mid": {"func": [self.s_task4_mid], "next": "task5_end"},
+            "task5_end": {"func": [self.s_task5_end], "next": None},
+        }
+
+    def start_main_task(self):
+        """メインタスクを開始する
+
+        先頭のタスクを開始して先頭のタスクのjob_id を得る
+        """
+        rdict = {}
+        sub_rdict = {}
+        tasks = self.tasks_dict
+        head_task_name = "task1_begin"
+        head_task_func_list = tasks[head_task_name]["func"]
+
+        job_id_list = []
+        for head_task_func in head_task_func_list:
+            job_id, _out_data = head_task_func()
+            job_id_list.append(job_id)
+        # sub_job_id は先頭のjob_id で代表させる
+        sub_job_id = job_id_list[0]
+        now_dt = make_aware(datetime.now())
+        self.main_job_id = sub_job_id
+        process_state = 'RUNNING'
+        in_data = {}
+        out_data = {}
+
+        rdict["main_job_id"] = self.main_job_id
+        rdict["main_task_name"] = self.main_task_name
+        rdict["process_state"] = process_state
+        rdict["process_start_time"] = now_dt
+        rdict["in_data"] = json.dumps(in_data, ensure_ascii=False)
+        rdict["out_data"] = json.dumps(out_data, ensure_ascii=False)
+
+        sub_rdict["sub_job_id"] = self.main_job_id
+        sub_rdict["parallel_job_id_list"] = job_id_list
+        sub_rdict["sub_task_name"] = head_task_name
+        sub_rdict["process_state"] = process_state
+        sub_rdict["process_start_time"] = now_dt
+        sub_rdict["in_data"] = json.dumps(in_data, ensure_ascii=False)
+        sub_rdict["out_data"] = json.dumps(out_data, ensure_ascii=False)
+        sub_rdict["main_task"] = None
+        return rdict, sub_rdict
+
+    def urge_process_to_go_forward(
+            self, task_name: str, job_id_list: List[str]):
+        """処理を進めるよう要請する (parallel)
+        """
+        # job_id は 複数ある場合、先頭のもので代表させる
+        job_id = job_id_list[0]
+        next_job_dict = {}
+        next_job_id = None
+        tasks = self.tasks_dict
+        task = tasks.get(task_name, None)
+        if task is None:
+            msg = f"No task defined in the tasks_dict: {tasks}"
+            raise ParamError(msg)
+        # task_func = task["func"]
+        next_task_name = task["next"]
+        if next_task_name is None:
+            next_task_func_list = None
+        else:
+            next_task_func_list = tasks[next_task_name]["func"]
+
+        # job_id_list のジョブが終わっているか確認する
+        # state, error_result = get_job_state(job_id)
+        # state = judge_job_state(state, error_result)
+        state = get_process_state(job_id_list)
+
+        if state == "RUNNING":
+            message = f"Current process state is {state}. (job_id: {job_id}, task_name: {task_name}) "
+        # ジョブが終わっていたら次のジョブをスタートする
+        elif state == "DONE-SUCCESS":
+            if next_task_name is None:
+                # 一連の全ての子タスクが終了したことを知らせる
+                message = f"Final process state is {state}. (job_id: {job_id}, task_name: {task_name})"
+            else:
+                # 次のタスクを実行して次のタスクの job_idリスト を得る
+                next_job_id_list, next_job_dict = BqScriptParallel.run_next_task(next_task_func_list, state, next_task_name)
+                # ジョブID は　ジョブIDリストの先頭のIDで代表させる
+                next_job_id = next_job_id_list[0]
+                message = f"Next job is started. (next_job_id: {next_job_id}, next_task_name: {next_task_name}"
+        elif state == "DONE-FAILURE":
+            message = f"Last process state is {state}. (job_id: {job_id}, task_name: {task_name})"
+        else:
+            message = f"Current process state is {state}. (job_id: {job_id}, task_name: {task_name})"
+
+        sub_task_dict = {"state": state, "job_id": job_id, "task_name": task_name}
+        # スタートした次のジョブの job_id を返す
+        # return next_job_id, message
+        return next_job_dict, message, sub_task_dict
+
+    @classmethod
+    def run_next_task(
+            cls,
+            next_task_func_list: List[callable],
+            state: str,
+            next_task_name: str):
+        """次のタスクを実行する
+        """
+        next_job_id_list = []
+        next_job_dict = {}
+        # パラメータチェク
+        if not next_task_func_list:
+            msg = f"Next task function list is empty. next_task_func_list: {next_task_func_list}"
+            raise ParamError(msg)
+        # 次の処理（複数）を実行する
+        for next_task_func in next_task_func_list:
+            job_id, rdict = next_task_func()
+            next_job_id = rdict.get("job_id", None)
+            next_job_id_list.append(next_job_id)
+        subtask_columns = (
+            'sub_job_id', 'sub_task_name', 'process_state', 'process_start_time', 'in_data', 'out_data')        
+        next_job_dict = {col: None for col in subtask_columns}
+        next_job_dict['sub_job_id'] = next_job_id_list[0]
+        next_job_dict['parallel_job_id_list'] = next_job_id_list
+        next_job_dict['sub_task_name'] = next_task_name
+        next_job_dict['process_state'] = state
+        next_job_dict['process_start_time'] = rdict['query_job'].started
+        next_job_dict['in_data'] = json.dumps({})
+        next_job_dict['out_data'] = json.dumps({})
+        return next_job_id_list, next_job_dict

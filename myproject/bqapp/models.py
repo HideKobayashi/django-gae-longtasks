@@ -31,6 +31,7 @@ class SubTask(models.Model):
     """サブタスク
     """
     sub_job_id = models.CharField("ジョブID", max_length=255, unique=True)
+    parallel_job_id_list = models.JSONField("並列ジョブIDリスト", default=list)
     sub_task_name = models.CharField("サブタスク名", max_length=255)
     process_state = models.CharField("処理状態", max_length=255, choices=PROCESS_STATE_CHOICES)
     process_start_time = models.DateTimeField("処理開始時刻")
