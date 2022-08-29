@@ -297,7 +297,7 @@ class TestBqScriptParallel:
         job_id = "jobid_running"
 
         with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
-            mock_client().get_job.return_value = mocked_query_job(job_id)
+            # mock_client().get_job.return_value = mocked_query_job(job_id)
             mock_client().query.return_value = mocked_query_job(job_id)
             bqscript = BqScriptParallel(main_task_name=main_task_name)
             rdict, sub_rdict = bqscript.start_main_task()
