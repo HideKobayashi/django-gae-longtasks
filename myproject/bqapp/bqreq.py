@@ -308,6 +308,46 @@ class BqScriptParallel(BqScript):
             "task5_end": {"func": [self.s_task5_end], "next": None},
         }
 
+    def start_main_task(self):
+        """メインタスクを開始する
+
+        先頭のタスクを開始して先頭のタスクのjob_id を得る
+        """
+        rdict = {}
+        sub_rdict = {}
+        tasks = self.tasks_dict
+        head_task_name = "task1_begin"
+        head_task_func_list = tasks[head_task_name]["func"]
+
+        job_id_list = []
+        for head_task_func in head_task_func_list:
+            job_id, _out_data = head_task_func()
+            job_id_list.append(job_id)
+        # sub_job_id は先頭のjob_id で代表させる
+        sub_job_id = job_id_list[0]
+        now_dt = make_aware(datetime.now())
+        self.main_job_id = sub_job_id
+        process_state = 'RUNNING'
+        in_data = {}
+        out_data = {}
+
+        rdict["main_job_id"] = self.main_job_id
+        rdict["main_task_name"] = self.main_task_name
+        rdict["process_state"] = process_state
+        rdict["process_start_time"] = now_dt
+        rdict["in_data"] = json.dumps(in_data, ensure_ascii=False)
+        rdict["out_data"] = json.dumps(out_data, ensure_ascii=False)
+
+        sub_rdict["sub_job_id"] = self.main_job_id
+        sub_rdict["parallel_job_id_list"] = job_id_list
+        sub_rdict["sub_task_name"] = head_task_name
+        sub_rdict["process_state"] = process_state
+        sub_rdict["process_start_time"] = now_dt
+        sub_rdict["in_data"] = json.dumps(in_data, ensure_ascii=False)
+        sub_rdict["out_data"] = json.dumps(out_data, ensure_ascii=False)
+        sub_rdict["main_task"] = None
+        return rdict, sub_rdict
+
     def urge_process_to_go_forward(
             self, task_name: str, job_id_list: List[str]):
         """処理を進めるよう要請する (parallel)

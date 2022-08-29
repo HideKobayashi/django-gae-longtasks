@@ -290,18 +290,18 @@ class TestBqScriptParallel:
         print(f"next_job_dict: {next_job_dict}")
         # assert actual.startswith(expect_message)
 
-    # def test_start_main_task(self):
-    #     """ メソッド start_main_task
-    #     """
-    #     main_task_name = "main_task"
-    #     job_id = "jobid_running"
+    def test_start_main_task(self):
+        """ メソッド start_main_task
+        """
+        main_task_name = "main_task"
+        job_id = "jobid_running"
 
-    #     with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
-    #         mock_client().get_job.return_value = mocked_query_job(job_id)
-    #         mock_client().query.return_value = mocked_query_job(job_id)
-    #         bqscript = BqScript(main_task_name=main_task_name)
-    #         rdict, sub_rdict = bqscript.start_main_task()
-    #     actual = rdict, sub_rdict
+        with mock.patch('bqapp.bqreq.bigquery.Client', autospec=True) as mock_client:
+            mock_client().get_job.return_value = mocked_query_job(job_id)
+            mock_client().query.return_value = mocked_query_job(job_id)
+            bqscript = BqScriptParallel(main_task_name=main_task_name)
+            rdict, sub_rdict = bqscript.start_main_task()
+        actual = rdict, sub_rdict
 
-    #     print(f"actual: {actual}", end="| ")
+        print(f"actual: {actual}", end="| ")
 
